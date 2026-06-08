@@ -1,187 +1,284 @@
+
 package simulador;
 
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.io.File;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
 
 public class Main {
 
     static Scanner scanner = new Scanner(System.in);
     static Ecosistema ecosistema;
+    static Clip clipMusicaFondo;
     
-    // Instancia global del reproductor para controlar la música del juego
-    static Reproductor miRadio = new Reproductor();
+    // Se cambia a no-final para poder resetearla al reiniciar el juego
+    static volatile int horaGlobal = 6; 
+    static String trackActual = "";
 
+    // -------------------------------------------------------
+    // REPRODUCIR EFECTOS DE SONIDO CORTOS
+    // -------------------------------------------------------
+    static void reproducirSonido(String archivo) {
+        try {
+            File f = new File(archivo);
+            if (!f.exists()) return; 
+            AudioInputStream audio = AudioSystem.getAudioInputStream(f);
+            Clip clip = AudioSystem.getClip();
+            clip.open(audio);
+            clip.start();
+            new Thread(() -> {
+                try {
+                    Thread.sleep(Math.min(clip.getMicrosecondLength() / 1000, 1000));
+                } catch (Exception e) {}
+            }).start();
+        } catch (Exception e) {}
+    }
+
+    // -------------------------------------------------------
+    // REPRODUCIR MÚSICA DE FONDO
+    // -------------------------------------------------------
+    static void cambiarMusicaFondo(String archivo) {
+        if (trackActual.equals(archivo)) {
+            return; 
+        }
+        try {
+            if (clipMusicaFondo != null) {
+                if (clipMusicaFondo.isRunning()) {
+                    clipMusicaFondo.stop();
+                }
+                clipMusicaFondo.close();
+            }
+            File f = new File(archivo);
+            if (!f.exists()) return;
+
+            AudioInputStream audio = AudioSystem.getAudioInputStream(f);
+            clipMusicaFondo = AudioSystem.getClip();
+            clipMusicaFondo.open(audio);
+            clipMusicaFondo.loop(Clip.LOOP_CONTINUOUSLY); 
+            clipMusicaFondo.start();
+            trackActual = archivo; 
+        } catch (Exception e) {}
+    }
+
+    static final String SONIDO_AGREGAR = "Button_Plate-Click-_Minecraft-Sound_-Sound-Effect-for-editing_M4A_128K_ (1).wav";
+    static final String SONIDO_MUERTE  = "Minecraft-hit-sound-1080p60fps_M4A_128K_.wav";
+    static final String SONIDO_CRECER  = "Level_XP-Sounds-_Minecraft_-Sound-Effects-for-editing_M4A_128K_.wav";
+
+    // -------------------------------------------------------
+    // MAIN: BUCLE GLOBAL DE REINICIO
+    // -------------------------------------------------------
     public static void main(String[] args) {
-        // 1. Iniciar con la música del menú principal
-        miRadio.encenderMusica("Hollow-Knight-OST-Enter-Hallownest_M4A_128K_.wav");
-        
-        mostrarBienvenida();
-        configurarJuego();
-        iniciarSimulacion();
-    }
-
-    // ------------------------------------------------------
-    // BIENVENIDA
-    // -------------------------------------------------------
-    static void mostrarBienvenida() {
-        System.out.println("╔══════════════════════════════════════════════════╗");
-        System.out.println("║                                                  ║");
-        System.out.println("║         🌍 Bienvenido a  B I O W O R L D        ║");
-        System.out.println("║       Simulador de Ecosistemas Interactivo       ║");
-        System.out.println("║                                                  ║");
-        System.out.println("╚══════════════════════════════════════════════════╝");
-        System.out.println();
-        System.out.println("En BioWorld podrás crear y gestionar tu propio");
-        System.out.println("ecosistema con animales, plantas y biomas únicos.");
-        System.out.println();
-        presionarParaContinuar();
-    }
-
-    // -------------------------------------------------------
-    // CONFIGURACION INICIAL DEL JUEGO
-    // -------------------------------------------------------
-    static void configurarJuego() {
-        // 1. Elegir bioma
-        Bioma.BiomaTipo bioma = elegirBioma();
-
-        // 2. Elegir temperatura
-        int temperatura = elegirTemperatura(bioma);
-
-        // 3. Crear ecosistema
-        ecosistema = new Ecosistema(bioma, temperatura);
-
-        // 4. Agregar plantas al ecosistema
-        agregarPlantas(bioma);
-
-        // 5. Agregar animales al ecosistema
-        agregarAnimales(bioma);
-
-        System.out.println("\n✅ ¡Ecosistema configurado exitosamente!");
-        System.out.println("   Bioma: " + bioma);
-        System.out.println("   Temperatura: " + temperatura + "°C");
-        System.out.println("   Plantas: " + ecosistema.contarPlantas());
-        System.out.println("   Animales: " + ecosistema.contarAnimales());
-        presionarParaContinuar();
-    }
-
-    // -------------------------------------------------------
-    // ELEGIR BIOMA
-    // -------------------------------------------------------
-    static Bioma.BiomaTipo elegirBioma() {
-        System.out.println("╔══════════════════════════════════╗");
-        System.out.println("║        SELECCIONA UN BIOMA       ║");
-        System.out.println("╠══════════════════════════════════╣");
-        System.out.println("║  1. 🏜️ Desierto                  ║");
-        System.out.println("║  2. 🌾 Praderas                  ║");
-        System.out.println("║  3. 🧊 Glaciar                   ║");
-        System.out.println("║  4. 🌿 Selva                     ║");
-        System.out.println("╚══════════════════════════════════╝");
-        System.out.print("Elige una opción (1-4): ");
-
-        int opcion = leerEntero(1, 4);
-        switch (opcion) {
-            case 1: return Bioma.BiomaTipo.DESIERTO;
-            case 2: return Bioma.BiomaTipo.PRADERA;
-            case 3: return Bioma.BiomaTipo.GLACIAR;
-            default: return Bioma.BiomaTipo.SELVA;
+        while (true) {
+            // Resetear valores iniciales para una nueva partida
+            horaGlobal = 6;
+            trackActual = "";
+            
+            cambiarMusicaFondo("Hollow-Knight-OST-Dirtmouth_M4A_128K_.wav");
+            mostrarBienvenida();
+            configurarJuego();
+            iniciarSimulacion();
+            
+            // Si el método iniciarSimulacion termina, significa que todos murieron o se forzó el colapso
+            mostrarFinDeJuego(horaGlobal);
+            
+            System.out.print("  ¿Deseas iniciar otra vez? (s/n): ");
+            String respuesta = scanner.next().trim().toLowerCase();
+            if (!respuesta.equals("s")) {
+                System.out.println("\n  Gracias por jugar BioWorld. ¡Hasta la proxima!");
+                if (clipMusicaFondo != null) clipMusicaFondo.close();
+                break; // Rompe el bucle global y cierra el programa en paz
+            }
+            System.out.println("\n  Reiniciando el universo...");
         }
     }
 
-    // -------------------------------------------------------
-    // ELEGIR TEMPERATURA
-    // -------------------------------------------------------
+    static void mostrarBienvenida() {
+        System.out.println("\n\u001B[32m"); 
+        System.out.println("      ____  _  ____ _ _ _ ____ ____  _    ___  ");
+        System.out.println("      |__]  |  |  | | | | |  | |__/  |    |  \\ ");
+        System.out.println("      |__]  |  |__| |_|_| |__| |  \\  |___ |__/ ");
+        System.out.println("   ================================================= ");
+        System.out.println("       SIMULADOR DE ECOSISTEMAS INTERACTIVO v2.0     ");
+        System.out.println("   ================================================= \u001B[0m");
+        System.out.println("\n    Crea, altera y observa la evolucion de la vida,");
+        System.out.println("    biomas, climas y cadenas alimenticias reales.\n");
+        presionarParaContinuar();
+    }
+
+    static void configurarJuego() {
+        Bioma.BiomaTipo bioma = elegirBioma();
+        int temperatura = elegirTemperatura(bioma);
+        ecosistema = new Ecosistema(bioma, temperatura);
+
+        agregarPlantas(bioma);
+        agregarAnimales(bioma);
+
+        System.out.println("\n\u001B[36m┌────────────────────────────────────────┐");
+        System.out.println("│       ECOSISTEMA CONFIGURADO          │");
+        System.out.println("└────────────────────────────────────────┘\u001B[0m");
+        System.out.printf("  Bioma       : %s\n", bioma);
+        System.out.printf("  Temperatura : %d C\n", temperatura);
+        System.out.printf("  Plantas     : %d unidades\n", ecosistema.contarPlantas());
+        System.out.printf("  Animales    : %d unidades\n", ecosistema.contarAnimales());
+        System.out.println("\u001B[36m──────────────────────────────────────────\u001B[0m");
+        presionarParaContinuar();
+    }
+
+    static Bioma.BiomaTipo elegirBioma() {
+        System.out.println("\n\u001B[34m┌────────────────────────────────────────┐");
+        System.out.println("│          SELECCIONA UN BIOMA           │");
+        System.out.println("└────────────────────────────────────────┘\u001B[0m");
+        System.out.println("  [1] Desierto (Calor extremo y sequia)");
+        System.out.println("  [2] Praderas (Clima templado y balanceado)");
+        System.out.println("  [3] Glaciar  (Frio polar e invierno eterno)");
+        System.out.println("  [4] Selva    (Humedad alta y abundante flora)");
+        System.out.print("\n Elige una opcion (1-4): ");
+
+        int op = leerEntero(1, 4);
+        if (op == 1) return Bioma.BiomaTipo.DESIERTO;
+        if (op == 2) return Bioma.BiomaTipo.PRADERA;
+        if (op == 3) return Bioma.BiomaTipo.GLACIAR;
+        return Bioma.BiomaTipo.SELVA;
+    }
+
     static int elegirTemperatura(Bioma.BiomaTipo bioma) {
         int[] rango = Bioma.rangoTemperatura(bioma);
-        System.out.println("\n🌡️ Rango de temperatura para " + bioma + ": " + rango[0] + "°C a " + rango[1] + "°C");
-        System.out.print("Ingresa la temperatura inicial: ");
+        System.out.println("\n Rango permitido para " + bioma + ": [" + rango[0] + "C a " + rango[1] + "C]");
+        System.out.print(" Ingresa la temperatura inicial: ");
         return leerEntero(rango[0], rango[1]);
     }
 
-    // -------------------------------------------------------
-    // AGREGAR PLANTAS
-    // -------------------------------------------------------
     static void agregarPlantas(Bioma.BiomaTipo bioma) {
-        String[] plantasDisponibles = Bioma.plantasDeBioma(bioma);
+        String[] disponibles = Bioma.plantasDeBioma(bioma);
+        int[] cantidades = new int[disponibles.length];
 
-        boolean agregarMas = true;
-        while (agregarMas) {
-            System.out.println("\n╔══════════════════════════════════╗");
-            System.out.println("║          PLANTAS DEL BIOMA       ║");
-            System.out.println("╚══════════════════════════════════╝");
-            for (int i = 0; i < plantasDisponibles.length; i++) {
-                System.out.println("  " + (i + 1) + ". " + plantasDisponibles[i]);
-            }
-
-            System.out.print("\n¿Qué planta deseas agregar? (1-" + plantasDisponibles.length + "): ");
-            int idx = leerEntero(1, plantasDisponibles.length) - 1;
-            System.out.print("¿Cuántas unidades de " + plantasDisponibles[idx] + "? (1-20): ");
-            int cantidad = leerEntero(1, 20);
-
-            boolean esVenenosa = Bioma.esPlantaVenenosa(plantasDisponibles[idx]);
-            for (int i = 0; i < cantidad; i++) {
-                ecosistema.agregarPlanta(new Planta(plantasDisponibles[idx], bioma, esVenenosa));
-            }
-            System.out.println("✅ " + cantidad + " " + plantasDisponibles[idx] + " agregada(s).");
-
-            System.out.print("¿Agregar otra planta? (s/n): ");
-            agregarMas = scanner.nextLine().trim().equalsIgnoreCase("s");
+        System.out.println("\n\u001B[32m┌────────────────────────────────────────┐");
+        System.out.println("│          SELECCION DE FLORA            │");
+        System.out.println("└────────────────────────────────────────┘\u001B[0m");
+        System.out.println("Especies nativas recomendadas:");
+        for (int i = 0; i < disponibles.length; i++) {
+            String etiqueta = Bioma.esPlantaVenenosa(disponibles[i]) ? "  [VENENOSA]" : "  [Segura]";
+            System.out.println("  [" + (i + 1) + "] " + disponibles[i] + etiqueta);
         }
+
+        System.out.println("\n  ¿Cuantas unidades deseas sembrar? (Max 20)");
+        for (int i = 0; i < disponibles.length; i++) {
+            System.out.print("  -> " + disponibles[i] + ": ");
+            cantidades[i] = leerEntero(0, 20);
+        }
+
+        int totalAgregadas = 0;
+        for (int i = 0; i < disponibles.length; i++) {
+            if (cantidades[i] > 0) {
+                boolean venenosa = Bioma.esPlantaVenenosa(disponibles[i]);
+                for (int j = 0; j < cantidades[i]; j++) {
+                    ecosistema.agregarPlanta(new Planta(disponibles[i], bioma, venenosa));
+                }
+                totalAgregadas += cantidades[i];
+            }
+        }
+
+        if (totalAgregadas > 0) reproducirSonido(SONIDO_AGREGAR);
     }
 
-    // -------------------------------------------------------
-    // AGREGAR ANIMALES
-    // -------------------------------------------------------
     static void agregarAnimales(Bioma.BiomaTipo bioma) {
         String[] herbivoros = Bioma.herbivoresDeBioma(bioma);
         String[] carnivoros = Bioma.carnivoresDeBioma(bioma);
+        int totalEspecies   = herbivoros.length + carnivoros.length;
 
-        boolean agregarMas = true;
-        while (agregarMas) {
-            System.out.println("\n╔══════════════════════════════════════╗");
-            System.out.println("║          ANIMALES DEL BIOMA          ║");
-            System.out.println("╠══════════════════════════════════════╣");
-            System.out.println("║  HERBÍVOROS:                         ║");
-            for (int i = 0; i < herbivoros.length; i++) {
-                System.out.println("║     " + (i + 1) + ". 🌿 " + herbivoros[i]);
+        int[]      cantidades   = new int[totalEspecies];
+        String[][] nombres      = new String[totalEspecies][10]; 
+
+        System.out.println("\n\u001B[33m┌────────────────────────────────────────┐");
+        System.out.println("│          SELECCION DE FAUNA            │");
+        System.out.println("└────────────────────────────────────────┘\u001B[0m");
+        System.out.println(" HERBIVOROS DISPONIBLES:");
+        for (int i = 0; i < herbivoros.length; i++) System.out.println("  [" + (i + 1) + "] " + herbivoros[i]);
+        
+        System.out.println("\n CARNIVOROS DISPONIBLES:");
+        for (int i = 0; i < carnivoros.length; i++) System.out.println("  [" + (herbivoros.length + i + 1) + "] " + carnivoros[i]);
+
+        scanner.nextLine(); 
+
+        System.out.println("\n  Cantidad a spawnear (Max 10 por especie):");
+        
+        for (int i = 0; i < herbivoros.length; i++) {
+            System.out.print("  -> " + herbivoros[i] + ": ");
+            cantidades[i] = leerEntero(0, 10);
+            scanner.nextLine(); 
+            for (int j = 0; j < cantidades[i]; j++) {
+                System.out.print("      Nombre para " + herbivoros[i] + " #" + (j + 1) + " (Presiona ENTER para omitir): ");
+                String n = scanner.nextLine().trim();
+                nombres[i][j] = n.isEmpty() ? herbivoros[i] : n;
             }
-            System.out.println("║  CARNÍVOROS:                         ║");
-            for (int i = 0; i < carnivoros.length; i++) {
-                System.out.println("║     " + (herbivoros.length + i + 1) + ". 🥩 " + carnivoros[i]);
+        }
+        
+        for (int i = 0; i < carnivoros.length; i++) {
+            int idx = herbivoros.length + i;
+            System.out.print("  -> " + carnivoros[i] + ": ");
+            cantidades[idx] = leerEntero(0, 10);
+            scanner.nextLine(); 
+            for (int j = 0; j < cantidades[idx]; j++) {
+                System.out.print("      Nombre para " + carnivoros[i] + " #" + (j + 1) + " (Presiona ENTER para omitir): ");
+                String n = scanner.nextLine().trim();
+                nombres[idx][j] = n.isEmpty() ? carnivoros[i] : n;
             }
-            System.out.println("╚══════════════════════════════════════╝");
+        }
 
-            int totalOpciones = herbivoros.length + carnivoros.length;
-            System.out.print("\n¿Qué animal deseas agregar? (1-" + totalOpciones + "): ");
-            int idx = leerEntero(1, totalOpciones) - 1;
-
-            String especie;
-            boolean esHerbivoro;
-            if (idx < herbivoros.length) {
-                especie = herbivoros[idx];
-                esHerbivoro = true;
-            } else {
-                especie = carnivoros[idx - herbivoros.length];
-                esHerbivoro = false;
-            }
-
-            System.out.print("¿Cuántos " + especie + "? (1-10): ");
-            int cantidad = leerEntero(1, 10);
-
-            for (int i = 0; i < cantidad; i++) {
-                System.out.print("¿Deseas ponerle nombre al " + especie + " #" + (i + 1) + "? (s/n): ");
-                String nombre;
-                if (scanner.nextLine().trim().equalsIgnoreCase("s")) {
-                    System.out.print("Nombre: ");
-                    nombre = scanner.nextLine().trim();
-                } else {
-                    nombre = especie;
+        for (int i = 0; i < totalEspecies; i++) {
+            if (cantidades[i] > 0) {
+                String especie = i < herbivoros.length ? herbivoros[i] : carnivoros[i - herbivoros.length];
+                boolean esHerbivoro = (i < herbivoros.length);
+                for (int j = 0; j < cantidades[i]; j++) {
+                    ecosistema.agregarAnimal(new Animal(nombres[i][j], especie, esHerbivoro, bioma));
                 }
-                ecosistema.agregarAnimal(new Animal(nombre, especie, esHerbivoro, bioma));
             }
-            System.out.println("✅ " + cantidad + " " + especie + " agregado(s).");
+        }
 
-            System.out.print("¿Agregar otro animal? (s/n): ");
-            agregarMas = scanner.nextLine().trim().equalsIgnoreCase("s");
+        reproducirSonido(SONIDO_AGREGAR);
+    }
+
+    // -------------------------------------------------------
+    // AVANCE TEMPORAL COMPARTIDO
+    // -------------------------------------------------------
+    static synchronized void ejecutarAvanceDeHora() {
+        ArrayList<Animal> copiaAntes = new ArrayList<>(ecosistema.getAnimales());
+        ArrayList<String> nombresCriasAntes = new ArrayList<>();
+        for (Animal a : copiaAntes) {
+            if (a.estaVivo() && !a.esAdulto()) {
+                nombresCriasAntes.add(a.getNombre());
+            }
+        }
+
+        horaGlobal++;
+        ecosistema.avanzarHora(horaGlobal);
+
+        if (horaGlobal % 5 == 0) {
+            System.out.println("\n\u001B[35m[REPRODUCCION] Han pasado 5 horas. El ecosistema procesa crias...\u001B[0m");
+        }
+
+        int horaDelDia = horaGlobal % 24;
+        boolean esDia = (horaDelDia >= 6 && horaDelDia < 18);
+
+        String trackSiguiente = esDia 
+            ? "Hollow-Knight-OST-Greenpath_M4A_128K_.wav" 
+            : "Hollow-Knight-OST-Enter-Hallownest_M4A_128K_.wav";
+        
+        cambiarMusicaFondo(trackSiguiente);
+
+        boolean alguienCrecio = false;
+        for (Animal a : ecosistema.getAnimales()) {
+            if (a.estaVivo() && a.esAdulto() && nombresCriasAntes.contains(a.getNombre())) {
+                alguienCrecio = true;
+                System.out.println("\n\u001B[32m[EVOLUCION] " + a.getNombre() + " ha alcanzado su etapa adulta!\u001B[0m");
+            }
+        }
+
+        if (alguienCrecio || ecosistema.huboCriaQueCrecio()) {
+            reproducirSonido(SONIDO_CRECER);
         }
     }
 
@@ -189,246 +286,219 @@ public class Main {
     // SIMULACION PRINCIPAL
     // -------------------------------------------------------
     static void iniciarSimulacion() {
-        System.out.println("\n🚀 ¡La simulación ha comenzado!");
+        System.out.println("\n\u001B[32m>>> El motor de BioWorld se ha iniciado correctamente. \u001B[0m");
         presionarParaContinuar();
 
-        int hora = 0;
+        cambiarMusicaFondo("Hollow-Knight-OST-Greenpath_M4A_128K_.wav");
+
+        Thread hiloReloj = new Thread(() -> {
+            while (ecosistema.hayAnimalesVivos()) {
+                try {
+                    Thread.sleep(60000); 
+                    
+                    int animalesAntesDeAvanzar = ecosistema.contarAnimales();
+                    ejecutarAvanceDeHora();
+                    
+                    int vivosDespues = ecosistema.contarAnimales();
+                    if (vivosDespues < animalesAntesDeAvanzar) {
+                        reproducirSonido(SONIDO_MUERTE);
+                    }
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+        });
+        
+        hiloReloj.setDaemon(true);
+        hiloReloj.start();
 
         while (ecosistema.hayAnimalesVivos()) {
-            // Verificar advertencia de pocos animales
+
             if (ecosistema.quedanPocosAnimales()) {
-                if (alertaPocosAnimales()) continue;
+                System.out.println("\n\u001B[31m  ALERTA CRITICA: Peligro de extincion inminente.\u001B[0m");
+                System.out.print("  ¿Quieres inyectar mas fauna al ecosistema? (s/n): ");
+                if (scanner.next().equalsIgnoreCase("s")) {
+                    agregarAnimales(ecosistema.getBiomaTipo());
+                    continue;
+                }
             }
 
-            // Gestionar el cambio de audio según el ciclo de día o noche actual
-            gestionarMusicaAmbiente(hora);
+            mostrarEstadoMundo(horaGlobal);
+            int opcion = mostrarMenuTurno();
 
-            // Mostrar estado del mundo
-            mostrarEstadoMundo(hora);
-
-            // Menú de turno
-            mostrarMenuTurno(hora);
-
-            // Avanzar horas
-            int horasASaltar = preguntarHorasASaltar();
-            for (int h = 0; h < horasASaltar; h++) {
-                hora++;
-                ecosistema.avanzarHora(hora);
-                if (!ecosistema.hayAnimalesVivos()) break;
+            if (opcion == 1) {
+                System.out.print("\n  ¿Cuantas horas quieres adelantar en el tiempo de golpe? (1-24): ");
+                int horasASaltar = leerEntero(1, 24);
+                
+                System.out.println("\n\u001B[35m  Avanzando " + horasASaltar + " horas...\u001B[0m");
+                int vivosAntesDelSalto = ecosistema.contarAnimales();
+                
+                for (int i = 0; i < horasASaltar; i++) {
+                    ejecutarAvanceDeHora();
+                    if (!ecosistema.hayAnimalesVivos()) break;
+                }
+                
+                int vivosDespuesDelSalto = ecosistema.contarAnimales();
+                if (vivosDespuesDelSalto < vivosAntesDelSalto) {
+                    reproducirSonido(SONIDO_MUERTE);
+                }
+                
+            } else if (opcion == 2) {
+                cambiarTemperatura();
+            } else if (opcion == 3) {
+                cambiarClima();
+            } else if (opcion == 4) {
+                mostrarListaDetallada();
+            } else if (opcion == 5) {
+                System.out.println("\n  MENU DE INYECCION BIOLOGICA:");
+                System.out.println("  [1] Sembrar nuevas plantas");
+                System.out.println("  [2] Spawnear nuevos animales");
+                System.out.print("  Selecciona que deseas agregar: ");
+                int seleccionVida = leerEntero(1, 2);
+                if (seleccionVida == 1) {
+                    agregarPlantas(ecosistema.getBiomaTipo());
+                } else {
+                    agregarAnimales(ecosistema.getBiomaTipo());
+                }
+            } else if (opcion == 6) {
+                // CORRECCIÓN SOLICITADA: En lugar de System.exit(0), rompemos el ciclo para ir al menú de reinicio
+                System.out.println("\nColapsando simulacion voluntariamente...");
+                break; 
             }
-
-            if (!ecosistema.hayAnimalesVivos()) break;
         }
-
-        // Apagar la radio al terminar la simulación
-        miRadio.detenerMusica();
-        mostrarFinDeJuego(hora);
-    }
-
-    // -------------------------------------------------------
-    // CONTROL DE MÚSICA DÍA / NOCHE
-    // -------------------------------------------------------
-    static void gestionarMusicaAmbiente(int hora) {
-        String descripcionCiclo = ecosistema.getDescripcionCiclo(hora).toLowerCase();
         
-        // Evaluamos el string que devuelve el ecosistema para saber si es de noche o de día
-        if (descripcionCiclo.contains("noche")) {
-            miRadio.encenderMusica("Hollow-Knight-OST-Dirtmouth_M4A_128K_.wav");
-        } else {
-            miRadio.encenderMusica("Hollow-Knight-OST-Greenpath_M4A_128K_.wav");
-        }
+        hiloReloj.interrupt();
     }
 
-    // -------------------------------------------------------
-    // MOSTRAR ESTADO DEL MUNDO
-    // -------------------------------------------------------
     static void mostrarEstadoMundo(int hora) {
-        System.out.println("\n╔══════════════════════════════════════════════════╗");
-        System.out.printf ("║  %-48s║%n", ecosistema.getDescripcionCiclo(hora));
-        System.out.printf ("║  Hora: %-42s║%n", hora + "h  |  " + ecosistema.getBiomaTipo() + "  |  " + ecosistema.getTemperatura() + "°C");
-        System.out.println("╠══════════════════════════════════════════════════╣");
-        System.out.printf ("║  🌿 Plantas vivas: %-30s║%n", ecosistema.contarPlantas());
-        System.out.printf ("║  🐾 Animales vivos: %-29s║%n", ecosistema.contarAnimales());
-        System.out.println("╚══════════════════════════════════════════════════╝");
+        int horaDelDia = hora % 24;
+        boolean esDia = (horaDelDia >= 6 && horaDelDia < 18);
+        
+        String iconoCiclo = esDia ? "BUEN DIA" : "BUENA NOCHE";
+        String colorCiclo = esDia ? "\u001B[33m" : "\u001B[34m"; 
 
-        // Mostrar animales
+        String horaFormateada = String.format("%02d:00", horaDelDia);
+
+        System.out.println("\n" + colorCiclo + "┌────────────────────────────────────────────────────────┐");
+        System.out.printf("│  %-52s │\n", iconoCiclo + " - " + ecosistema.getDescripcionCiclo(hora));
+        System.out.printf("│   Reloj: %-13s |  Bioma: %-19s │\n", horaFormateada + " (" + hora + "h total)", ecosistema.getBioma());
+        System.out.printf("│   Temp: %-14s |  Clima: %-19s │\n", ecosistema.getTemperatura() + "C", ecosistema.getClima());
+        System.out.println("├────────────────────────────────────────────────────────┤");
+        System.out.printf("│   Plantas vivas: %-10d |  Animales vivos: %-10d │\n", ecosistema.contarPlantas(), ecosistema.contarAnimales());
+        System.out.println("└────────────────────────────────────────────────────────┘\u001B[0m");
+
         ArrayList<Animal> animales = ecosistema.getAnimales();
         if (!animales.isEmpty()) {
-            System.out.println("\n--- ESTADO DE ANIMALES ---");
+            System.out.println("\n  MONITOR DE FAUNA:");
             for (Animal a : animales) {
                 if (a.estaVivo()) {
-                    System.out.printf("  [%s] %s | Vida: %d%% | Hambre: %dh | %s%n",
-                        a.esHerbivoro() ? "🌿" : "🥩",
-                        a.getNombre(),
-                        a.getVida(),
-                        a.getHorasSinComer(),
-                        a.getEstadoEspecial()
-                    );
+                    String badge = a.esHerbivoro() ? "\u001B[32m[HERB]\u001B[0m" : "\u001B[31m[CARN]\u001B[0m";
+                    System.out.printf("  %s %-12s - Vida: %3d%% | Ayuno: %-2s hr | Estado: %s\n", 
+                        badge, 
+                        a.getNombre(), 
+                        a.getVida(), 
+                        a.getHorasSinComer(), 
+                        a.getEstadoEspecial());
                 }
             }
         }
     }
 
-    // -------------------------------------------------------
-    // MENÚ DE TURNO
-    // -------------------------------------------------------
-    static void mostrarMenuTurno(int hora) {
-        System.out.println("\n╔══════════════════════════════════╗");
-        System.out.println("║          MENÚ DE CONTROL         ║");
-        System.out.println("╠══════════════════════════════════╣");
-        System.out.println("║  1. ⏭️  Avanzar horas              ║");
-        System.out.println("║  2. 🌡️  Cambiar temperatura       ║");
-        System.out.println("║  3. ⛅  Cambiar clima             ║");
-        System.out.println("║  4. 📋  Ver lista detallada       ║");
-        System.out.println("║  5. 🚪 Salir del juego            ║");
-        System.out.println("╚══════════════════════════════════╝");
-        System.out.print("Opción: ");
-
-        int op = leerEntero(1, 5);
-        switch (op) {
-            case 2:
-                cambiarTemperatura();
-                break;
-            case 3:
-                cambiarClima();
-                break;
-            case 4:
-                mostrarListaDetallada();
-                break;
-            case 5:
-                System.out.println("👋 Saliendo de BioWorld... ¡Hasta pronto!");
-                miRadio.detenerMusica();
-                System.exit(0);
-                break;
-            default:
-                break; 
-        }
+    static int mostrarMenuTurno() {
+        System.out.println("\n\u001B[36m PANEL DE DIOS ──────────────────────┐\u001B[0m");
+        System.out.println("  [1] Forzar un adelanto temporal manual");
+        System.out.println("  [2] Alterar temperatura del bioma");
+        System.out.println("  [3] Provocar un cambio de clima");
+        System.out.println("  [4] Ver base de datos del mundo");
+        System.out.println("  [5] Sembrar flora / Spawnear fauna"); 
+        System.out.println("  [6] Colapsar universo simulado");
+        System.out.println("\u001B[36m─────────────────────────────────────┘\u001B[0m");
+        System.out.print("  Selecciona tu accion: ");
+        return leerEntero(1, 6);
     }
 
-    // -------------------------------------------------------
-    // PREGUNTAR CUÁNTAS HORAS SALTAR
-    // -------------------------------------------------------
-    static int preguntarHorasASaltar() {
-        System.out.println("\n¿Deseas saltar horas?");
-        System.out.println("  1. Sí, elegir cuántas");
-        System.out.println("  2. No, avanzar 1 hora (1 minuto real)");
-        System.out.print("Opción: ");
-        int op = leerEntero(1, 2);
-        if (op == 1) {
-            System.out.print("¿Cuántas horas deseas saltar? (1-24): ");
-            return leerEntero(1, 24);
-        } else {
-            System.out.println("⏳ Avanzando 1 hora...");
-            try { Thread.sleep(500); } catch (InterruptedException e) { /* ignorar */ }
-            return 1;
-        }
-    }
-
-    // -------------------------------------------------------
-    // CAMBIAR TEMPERATURA
-    // -------------------------------------------------------
     static void cambiarTemperatura() {
         int[] rango = Bioma.rangoTemperatura(ecosistema.getBiomaTipo());
-        System.out.println("🌡️ Temperatura actual: " + ecosistema.getTemperatura() + "°C");
-        System.out.print("Nueva temperatura (" + rango[0] + " a " + rango[1] + "°C): ");
-        int temp = leerEntero(rango[0], rango[1]);
-        ecosistema.setTemperatura(temp);
-        System.out.println("✅ Temperatura cambiada a " + temp + "°C");
+        System.out.println("\n  Temperatura actual del ecosistema: " + ecosistema.getTemperatura() + "C");
+        System.out.print("  Ingresa el nuevo valor [" + rango[0] + " a " + rango[1] + "]: ");
+        int t = leerEntero(rango[0], rango[1]);
+        ecosistema.setTemperatura(t);
+        System.out.println("   Ola de aclimatacion completada.");
     }
 
-    // -------------------------------------------------------
-    // CAMBIAR CLIMA
-    // -------------------------------------------------------
     static void cambiarClima() {
-        System.out.println("⛅ Selecciona el clima:");
-        System.out.println("  1. ☀️  Soleado");
-        System.out.println("  2. 🌧️  Lluvioso");
-        System.out.println("  3. ❄️  Nevado");
-        System.out.println("  4. 🌪️  Tormenta");
-        System.out.print("Opción: ");
+        System.out.println("\n  MENU DE CONTROL CLIMATICO:");
+        System.out.println("  [1] Soleado");
+        System.out.println("  [2] Lluvioso");
+        System.out.println("  [3] Nevado");
+        System.out.println("  [4] Tormenta");
+        System.out.print("  Desata un clima: ");
         int op = leerEntero(1, 4);
         String[] climas = {"Soleado", "Lluvioso", "Nevado", "Tormenta"};
         ecosistema.setClima(climas[op - 1]);
-        System.out.println("✅ Clima cambiado a: " + climas[op - 1]);
+        System.out.println("   Modificacion atmosferica enviada.");
     }
 
-    // -------------------------------------------------------
-    // VER LISTA DETALLADA
-    // -------------------------------------------------------
     static void mostrarListaDetallada() {
-        System.out.println("\n=== LISTA DETALLADA DE PLANTAS ===");
-        for (Planta p : ecosistema.getPlantas()) {
+        System.out.println("\n\u001B[32m=====================================================");
+        System.out.println("                ESTADISTICAS DE FLORA                ");
+        System.out.println("=====================================================\u001B[0m");
+        ArrayList<Planta> plantas = ecosistema.getPlantas();
+        for (Planta p : plantas) {
             if (p.estaViva()) {
-                System.out.printf("  🌱 %s | %s | Venenosa: %s%n",
-                    p.getNombre(), p.getTipo(), p.esVenenosa() ? "⚠️ Sí" : "No");
+                String ven = p.esVenenosa() ? "VENENOSA" : "Normal";
+                System.out.printf("   Nombre: %-12s | Salud: %-3d | Tipo: %s\n", p.getNombre(), p.getSalud(), ven);
             }
         }
 
-        System.out.println("\n=== LISTA DETALLADA DE ANIMALES ===");
-        for (Animal a : ecosistema.getAnimales()) {
+        System.out.println("\n\u001B[33m=====================================================");
+        System.out.println("                ESTADISTICAS DE FAUNA                ");
+        System.out.println("=====================================================\u001B[0m");
+        ArrayList<Animal> animales = ecosistema.getAnimales();
+        for (Animal a : animales) {
             if (a.estaVivo()) {
-                System.out.printf("  %s %s (%s) | Vida: %d%% | Edad: %dh | Hambre: %dh | Enfermo: %s%n",
-                    a.esHerbivoro() ? "🌿" : "🥩",
-                    a.getNombre(), a.getEspecie(),
-                    a.getVida(), a.getEdad(),
-                    a.getHorasSinComer(),
-                    a.estaEnfermo() ? "🤒 Sí" : "No"
-                );
+                String etapa = a.esAdulto() ? "Adulto" : "Cria";
+                String enfermedad = a.estaEnfermo() ? "Si" : "No";
+                System.out.printf("   %-10s (%-8s) | Edad: %-3sh | Enfermo: %-5s | %s\n", 
+                    a.getNombre(), a.getEspecie(), a.getEdad(), enfermedad, etapa);
             }
         }
+        System.out.println("\u001B[33m=====================================================\u001B[0m");
         presionarParaContinuar();
     }
 
-    // -------------------------------------------------------
-    // ALERTA DE POCOS ANIMALES
-    // -------------------------------------------------------
-    static boolean alertaPocosAnimales() {
-        System.out.println("\n⚠️ ¡ADVERTENCIA! Quedan muy pocos animales en tu ecosistema.");
-        System.out.println("   ¿Deseas agregar más animales?");
-        System.out.println("  1. Sí");
-        System.out.println("  2. No, continuar");
-        System.out.print("Opción: ");
-        int op = leerEntero(1, 2);
-        if (op == 1) {
-            agregarAnimales(ecosistema.getBiomaTipo());
-            return true;
-        }
-        return false;
-    }
-
-    // -------------------------------------------------------
-    // FIN DEL JUEGO
-    // -------------------------------------------------------
     static void mostrarFinDeJuego(int hora) {
-        System.out.println("\n╔══════════════════════════════════════════════════╗");
-        System.out.println("║            💀 FIN DE LA SIMULACIÓN               ║");
-        System.out.println("╠══════════════════════════════════════════════════╣");
-        System.out.println("║  Todos los animales han muerto.                  ║");
-        System.out.printf ("║  El ecosistema duró: %-28s║%n", hora + " horas");
-        System.out.println("║  Gracias por jugar BioWorld 🌍                   ║");
-        System.out.println("╚══════════════════════════════════════════════════╝");
+        if (clipMusicaFondo != null) clipMusicaFondo.stop();
+        reproducirSonido(SONIDO_MUERTE);
+
+        System.out.println("\n\u001B[31m");
+        System.out.println("                       ____ _ _  _ ");
+        System.out.println("                       |___ | |\\ | ");
+        System.out.println("                       |    | | \\| ");
+        System.out.println("   ================================================= ");
+        System.out.println("        LOS ANIMALES MURIERON, JUEGO TERMINADO       ");
+        System.out.println("   ================================================= \u001B[0m");
+        System.out.println("     Tu civilizacion/ecosistema colapso.");
+        System.out.println("     El universo resistio un total de: " + hora + " horas.\n");
     }
 
-    // -------------------------------------------------------
-    // UTILIDADES DE ENTRADA
-    // -------------------------------------------------------
     static int leerEntero(int min, int max) {
         while (true) {
             try {
-                String linea = scanner.nextLine().trim();
-                int valor = Integer.parseInt(linea);
+                int valor = Integer.parseInt(scanner.next().trim());
                 if (valor >= min && valor <= max) return valor;
-                System.out.print("Por favor ingresa un número entre " + min + " y " + max + ": ");
+                System.out.print("  Seleccion invalida. Intenta denuevo (" + min + "-" + max + "): ");
             } catch (NumberFormatException e) {
-                System.out.print("Entrada inválida. Ingresa un número entre " + min + " y " + max + ": ");
+                System.out.print("  Tipo de dato incorrecto. Ingresa un numero (" + min + "-" + max + "): ");
             }
         }
     }
 
     static void presionarParaContinuar() {
-        System.out.println("\nPresiona ENTER para continuar...");
+        System.out.println("\n\u001B[37m  [Presiona ENTER para continuar...]\u001B[0m");
         try {
+            System.in.read();
             scanner.nextLine();
-        } catch (Exception e) { /* ignorar */ }
+        } catch (Exception e) { }
     }
 }

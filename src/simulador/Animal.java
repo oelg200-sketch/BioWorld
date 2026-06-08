@@ -59,11 +59,14 @@ package simulador;
 	        this.horasParaReproducirse = calcularTiempoReproduccion() + 5; // Crías tardan 5h extra
 	    }
 
-	    // --- LÓGICA DE TURNO ---
-
-	    /**
-	     * Avanza una hora para este animal: hambre, agua, enfermedad, edad.
-	     */
+	    public void recibirDanioAtaque(int danio, String causa) {
+	        vida -= danio;
+	        if (vida < 0) vida = 0;
+	        if (vida == 0 && estaVivo) {
+	            estaVivo = false;
+	            System.out.println("  >> " + nombre + " ha muerto por " + causa + ".");
+	        }
+	    }
 	    public void avanzarHora() {
 	        if (!estaVivo) return;
 
@@ -413,5 +416,10 @@ package simulador;
 	    public void setTemperatura(int t) { this.temperatura = t; }
 	    public String getClima() { return clima; }
 	    public void setClima(String c) { this.clima = c; }
+
+		public boolean huboCriaQueCrecio() {
+			// TODO Auto-generated method stub
+			return false;
+		}
 	}
 
